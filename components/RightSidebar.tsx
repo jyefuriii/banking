@@ -19,9 +19,7 @@ const RightSidebar = ({ user, banks }: RightSidebarProps) => {
             </span>
           </div>
           <div className="profile-details">
-            <h1 className="profile-name">
-              {user.firstName} {user.lastName}
-            </h1>
+            <h1 className="profile-name">{user.name}</h1>
             <p className="profile-email">{user.email}</p>
           </div>
         </div>
@@ -41,7 +39,7 @@ const RightSidebar = ({ user, banks }: RightSidebarProps) => {
               <BankCard
                 key={banks[0].$id}
                 account={banks[0]}
-                userName={user?.firstName ? user.firstName[0] : "?"}
+                userName={user.name}
                 showBalance={false}
               />
             </div>
@@ -50,7 +48,7 @@ const RightSidebar = ({ user, banks }: RightSidebarProps) => {
                 <BankCard
                   key={banks[1].$id}
                   account={banks[1]}
-                  userName={user?.firstName ? user.firstName[0] : "?"}
+                  userName={user.name}
                   showBalance={false}
                 />
               </div>
