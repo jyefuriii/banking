@@ -344,7 +344,7 @@
   }
 
   .footer_email {
-    @apply flex flex-1 flex-col mr-10 justify-center max-xl:hidden;
+    @apply flex flex-1 flex-col justify-center max-xl:hidden;
   }
 
   .footer_name-mobile {

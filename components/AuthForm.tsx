@@ -10,14 +10,14 @@ import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import {
   Form,
-  /*   FormControl,
+  /*  FormControl,
   FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage, */
 } from "@/components/ui/form";
-//import { Input } from "@/components/ui/input";
+// import { Input } from "@/components/ui/input";
 import CustomInput from "./CustomInput";
 import { authFormSchema } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
@@ -38,14 +38,6 @@ const AuthForm = ({ type }: { type: string }) => {
     defaultValues: {
       email: "",
       password: "",
-      firstName: "",
-      lastName: "",
-      address1: "",
-      city: "",
-      state: "",
-      postalCode: "",
-      dateOfBirth: "",
-      ssn: "",
     },
   });
 
@@ -71,6 +63,7 @@ const AuthForm = ({ type }: { type: string }) => {
         };
 
         const newUser = await signUp(userData);
+
         setUser(newUser);
       }
 
@@ -103,7 +96,6 @@ const AuthForm = ({ type }: { type: string }) => {
             Horizon
           </h1>
         </Link>
-
         <div className="flex flex-col gap-1 md:gap-3">
           <h1 className="text-24 lg:text-36 font-semibold text-gray-900">
             {user ? "Link Account" : type === "sign-in" ? "Sign In" : "Sign Up"}
@@ -116,7 +108,7 @@ const AuthForm = ({ type }: { type: string }) => {
         </div>
       </header>
       {user ? (
-        <div className="flex flex-col gap-4 p-[500px] bg-gold">
+        <div className="flex flex-col gap-4">
           <PlaidLink user={user} variant="primary" />
         </div>
       ) : (
@@ -136,7 +128,7 @@ const AuthForm = ({ type }: { type: string }) => {
                       control={form.control}
                       name="lastName"
                       label="Last Name"
-                      placeholder="Enter your last name"
+                      placeholder="Enter your first name"
                     />
                   </div>
                   <CustomInput
