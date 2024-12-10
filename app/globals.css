@@ -344,7 +344,7 @@
   }
 
   .footer_email {
-    @apply flex flex-1 flex-col justify-center max-xl:hidden;
+    @apply flex flex-1 flex-col mr-10 justify-center max-xl:hidden;
   }
 
   .footer_name-mobile {
@@ -356,7 +356,7 @@
   }
 
   .footer_image {
-    @apply relative size-5 max-xl:w-full max-xl:flex max-xl:justify-center max-xl:items-center ml-2;
+    @apply relative size-5 max-xl:w-full max-xl:flex max-xl:justify-center max-xl:items-center;
   }
 
   /* Sidebar */

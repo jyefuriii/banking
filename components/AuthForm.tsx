@@ -30,7 +30,6 @@ const AuthForm = ({ type }: { type: string }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-
   const formSchema = authFormSchema(type);
 
   // 1. Define your form.
@@ -39,6 +38,14 @@ const AuthForm = ({ type }: { type: string }) => {
     defaultValues: {
       email: "",
       password: "",
+      firstName: "",
+      lastName: "",
+      address1: "",
+      city: "",
+      state: "",
+      postalCode: "",
+      dateOfBirth: "",
+      ssn: "",
     },
   });
 
@@ -64,7 +71,6 @@ const AuthForm = ({ type }: { type: string }) => {
         };
 
         const newUser = await signUp(userData);
-        console.log("New User:", newUser); // Log to verify newUser
         setUser(newUser);
       }
 
@@ -110,7 +116,7 @@ const AuthForm = ({ type }: { type: string }) => {
         </div>
       </header>
       {user ? (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 p-[500px] bg-gold">
           <PlaidLink user={user} variant="primary" />
         </div>
       ) : (
