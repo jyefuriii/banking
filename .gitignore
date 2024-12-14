@@ -39,4 +39,5 @@ next-env.d.ts
 
 # Sentry Config File
 .sentryclirc
-node_modules
+node_modules/
+.next/
