@@ -41,3 +41,4 @@ next-env.d.ts
 .sentryclirc
 node_modules/
 .next/
+.env.sentry-build-plugin
