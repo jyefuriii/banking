@@ -1,6 +1,0 @@
-{
-  "/(root)/my-banks/page": "app/(root)/my-banks/page.js",
-  "/(root)/payment-transfer/page": "app/(root)/payment-transfer/page.js",
-  "/(root)/page": "app/(root)/page.js",
-  "/(auth)/sign-in/page": "app/(auth)/sign-in/page.js"
-}
