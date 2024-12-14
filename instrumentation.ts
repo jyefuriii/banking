@@ -1,13 +1,3 @@
-import * as Sentry from "@sentry/nextjs";
-
-export async function register() {
-  if (process.env.NEXT_RUNTIME === "nodejs") {
-    await import("./sentry.server.config");
-  }
-
-  if (process.env.NEXT_RUNTIME === "edge") {
-    await import("./sentry.edge.config");
-  }
-}
-
-export const onRequestError = Sentry.captureRequestError;
+version https://git-lfs.github.com/spec/v1
+oid sha256:158fe4c748f1599b56a1681e417ceddcda7ce40b988f95fca298c5ab548ca38c
+size 326
