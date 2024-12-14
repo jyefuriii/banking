@@ -1601,6 +1601,7 @@ video {
 @media (min-width: 1024px) {
 
   .home-content {
+    width: 820px;
     padding-top: 3rem;
     padding-bottom: 3rem;
   }
