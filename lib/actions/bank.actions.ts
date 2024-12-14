@@ -68,11 +68,12 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
   try {
     // get bank from db
     const bank = await getBank({ documentId: appwriteItemId });
-
+    console.log("Bank Data:", bank);
     // get account info from plaid
     const accountsResponse = await plaidClient.accountsGet({
       access_token: bank.accessToken,
     });
+    console.log("Plaid Accounts Response:", accountsResponse);
     const accountData = accountsResponse.data.accounts[0];
 
     // get transfer transactions from appwrite
@@ -115,9 +116,10 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
     };
 
     // sort transactions by date such that the most recent transaction is first
-      const allTransactions = [...transactions, ...transferTransactions].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
+  const allTransactions = [
+    ...(Array.isArray(transactions) ? transactions : []),
+    ...(Array.isArray(transferTransactions) ? transferTransactions : []),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return parseStringify({
       data: account,
@@ -151,7 +153,7 @@ export const getTransactions = async ({
   accessToken,
 }: getTransactionsProps) => {
   let hasMore = true;
-  let transactions: any = [];
+  let transactions: any[] = [];
 
   try {
     // Iterate through each page of new transaction updates for item
@@ -161,25 +163,33 @@ export const getTransactions = async ({
       });
 
       const data = response.data;
+      // Ensure that data.added is an array before trying to map over it
+      if (Array.isArray(data.added)) {
+        transactions = [
+          ...transactions,
+          ...data.added.map((transaction) => ({
+            id: transaction.transaction_id,
+            name: transaction.name,
+            paymentChannel: transaction.payment_channel,
+            type: transaction.payment_channel,
+            accountId: transaction.account_id,
+            amount: transaction.amount,
+            pending: transaction.pending,
+            category: transaction.category ? transaction.category[0] : "",
+            date: transaction.date,
+            image: transaction.logo_url,
+          })),
+        ];
+      } else {
+        console.error("Error: response data.added is not an array");
+      }
 
-      transactions = response.data.added.map((transaction) => ({
-        id: transaction.transaction_id,
-        name: transaction.name,
-        paymentChannel: transaction.payment_channel,
-        type: transaction.payment_channel,
-        accountId: transaction.account_id,
-        amount: transaction.amount,
-        pending: transaction.pending,
-        category: transaction.category ? transaction.category[0] : "",
-        date: transaction.date,
-        image: transaction.logo_url,
-      }));
-
-      hasMore = data.has_more;
+      hasMore = data.has_more; // Check if there are more transactions to fetch
     }
 
     return parseStringify(transactions);
   } catch (error) {
     console.error("An error occurred while getting the accounts:", error);
+    return parseStringify([]);
   }
 };
