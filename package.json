@@ -37,6 +37,7 @@
     "zod": "^3.23.4"
   },
   "devDependencies": {
+    "@sentry/cli": "^2.39.1",
     "@types/estree": "^1.0.6",
     "@types/node": "^20",
     "@types/react": "^18",
