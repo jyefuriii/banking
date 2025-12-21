@@ -1,13 +1,6 @@
 "use server";
 
-import {
-  ACHClass,
-  CountryCode,
-  TransferAuthorizationCreateRequest,
-  TransferCreateRequest,
-  TransferNetwork,
-  TransferType,
-} from "plaid";
+import { CountryCode } from "plaid";
 
 import { plaidClient } from "../plaid";
 import { parseStringify } from "../utils";
@@ -116,10 +109,10 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
     };
 
     // sort transactions by date such that the most recent transaction is first
-  const allTransactions = [
-    ...(Array.isArray(transactions) ? transactions : []),
-    ...(Array.isArray(transferTransactions) ? transferTransactions : []),
-  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const allTransactions = [
+      ...(Array.isArray(transactions) ? transactions : []),
+      ...(Array.isArray(transferTransactions) ? transferTransactions : []),
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return parseStringify({
       data: account,
@@ -153,7 +146,7 @@ export const getTransactions = async ({
   accessToken,
 }: getTransactionsProps) => {
   let hasMore = true;
-  let transactions: any[] = [];
+  let transactions: Array<Record<string, unknown>> = [];
 
   try {
     // Iterate through each page of new transaction updates for item
