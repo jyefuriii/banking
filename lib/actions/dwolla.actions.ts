@@ -55,11 +55,89 @@ export const createDwollaCustomer = async (
   newCustomer: NewDwollaCustomerParams
 ) => {
   try {
-    return await dwollaClient
-      .post("customers", newCustomer)
-      .then((res) => res.headers.get("location"));
-  } catch (err) {
-    console.error("Creating a Dwolla Customer Failed: ", err);
+    // Validate required environment variables
+    if (!process.env.DWOLLA_KEY || !process.env.DWOLLA_SECRET) {
+      throw new Error("Dwolla credentials are not configured. Please check your environment variables.");
+    }
+
+    if (!process.env.DWOLLA_ENV) {
+      throw new Error("Dwolla environment is not set. Please set DWOLLA_ENV to 'sandbox' or 'production'.");
+    }
+
+    // Format the customer data according to Dwolla API requirements
+    const dwollaCustomerData = {
+      firstName: newCustomer.firstName,
+      lastName: newCustomer.lastName,
+      email: newCustomer.email,
+      type: newCustomer.type, // "personal" or "business"
+      address1: newCustomer.address1,
+      city: newCustomer.city,
+      state: newCustomer.state,
+      postalCode: newCustomer.postalCode,
+      dateOfBirth: newCustomer.dateOfBirth, // Format: YYYY-MM-DD
+      ssn: newCustomer.ssn, // Format: XXXX (last 4 digits) or full SSN
+    };
+
+    console.log("Creating Dwolla customer with data:", {
+      ...dwollaCustomerData,
+      ssn: dwollaCustomerData.ssn ? "***" + dwollaCustomerData.ssn.slice(-4) : "not provided"
+    });
+
+    const response = await dwollaClient.post("customers", dwollaCustomerData);
+    const location = response.headers.get("location");
+    
+    if (!location) {
+      throw new Error("Dwolla customer created but no location URL returned.");
+    }
+    
+    console.log("Dwolla customer created successfully:", location);
+    return location;
+  } catch (err: any) {
+    console.error("Creating a Dwolla Customer Failed - Full Error:", {
+      message: err?.message,
+      response: err?.response,
+      body: err?.response?.body,
+      status: err?.response?.status,
+      error: err
+    });
+    
+    // Parse Dwolla validation errors
+    if (err?.response?.body) {
+      const errorBody = err.response.body;
+      
+      // Check if it's a validation error with embedded errors
+      if (errorBody._embedded?.errors && Array.isArray(errorBody._embedded.errors)) {
+        const validationErrors = errorBody._embedded.errors.map((e: any) => {
+          const field = e.path?.replace('/', '') || 'field';
+          return `${field}: ${e.message}`;
+        }).join(', ');
+        
+        throw new Error(`Validation error: ${validationErrors}`);
+      }
+      
+      // Fallback to general error message
+      const errorMessage = errorBody?.message || JSON.stringify(errorBody);
+      throw new Error(`Dwolla customer creation failed: ${errorMessage}`);
+    }
+    
+    // Try to parse error message if it's a JSON string
+    if (err?.message) {
+      try {
+        const parsedError = JSON.parse(err.message);
+        if (parsedError._embedded?.errors) {
+          const validationErrors = parsedError._embedded.errors.map((e: any) => {
+            const field = e.path?.replace('/', '') || 'field';
+            return `${field}: ${e.message}`;
+          }).join(', ');
+          throw new Error(`Validation error: ${validationErrors}`);
+        }
+      } catch (parseError) {
+        // If parsing fails, use the original message
+      }
+      throw new Error(`Dwolla customer creation failed: ${err.message}`);
+    }
+    
+    throw new Error("Dwolla customer creation failed. Please check your Dwolla credentials and try again.");
   }
 };
 

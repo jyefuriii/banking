@@ -31,9 +31,15 @@ export const getUserInfo = async ({ userId }: getUserInfoProps) => {
       [Query.equal("userId", [userId])]
     );
 
+    if (!user.documents || user.documents.length === 0) {
+      console.log(`No user document found for userId: ${userId}`);
+      return null;
+    }
+
     return parseStringify(user.documents[0]);
   } catch (error) {
-    console.log(error);
+    console.error("Error in getUserInfo:", error);
+    return null;
   }
 };
 
@@ -51,9 +57,50 @@ export const signIn = async ({ email, password }: signInProps) => {
 
     const user = await getUserInfo({ userId: session.userId });
 
+    if (!user) {
+      // Get account info to help debug
+      try {
+        const accountInfo = await account.get();
+        console.error(`User document missing for userId: ${session.userId}, email: ${accountInfo.email}`);
+      } catch (accountError) {
+        console.error("Error getting account info:", accountError);
+      }
+      // Throw a specific error that won't be confused with invalid credentials
+      const profileError = new Error("PROFILE_DATA_MISSING: Your account exists but profile data is missing. This may have occurred during sign-up. Please try signing up again or contact support.");
+      throw profileError;
+    }
+
     return parseStringify(user);
-  } catch (error) {
-    console.error("Error", error);
+  } catch (error: any) {
+    console.error("Sign in error details:", {
+      message: error?.message,
+      code: error?.code,
+      type: error?.type,
+      response: error?.response,
+      error: error
+    });
+    
+    // If this is our profile data missing error, re-throw it as-is
+    if (error?.message?.includes("PROFILE_DATA_MISSING")) {
+      throw error;
+    }
+    
+    // Only classify as invalid credentials if it's specifically about authentication
+    // Appwrite typically throws errors with specific messages for invalid credentials
+    const errorMessage = error?.message?.toLowerCase() || "";
+    const isInvalidCredentials = 
+      (errorMessage.includes("invalid credentials") && !errorMessage.includes("profile")) || 
+      (errorMessage.includes("invalid password") && !errorMessage.includes("profile")) ||
+      (errorMessage.includes("wrong password") && !errorMessage.includes("profile")) ||
+      (errorMessage.includes("user not found") && !errorMessage.includes("profile")) ||
+      (error?.code === 401 && errorMessage.includes("unauthorized") && !errorMessage.includes("profile"));
+    
+    if (isInvalidCredentials) {
+      throw new Error("Invalid email or password. Please try again.");
+    }
+    
+    // Re-throw the original error so the actual message is preserved
+    throw error;
   }
 };
 
@@ -72,14 +119,22 @@ export const signUp = async ({ password, ...userData }: SignUpParams) => {
       `${firstName} ${lastName}`
     );
 
-    if (!newUserAccount) throw new Error("Error creating user");
+    if (!newUserAccount) throw new Error("Error creating user account");
 
     const dwollaCustomerUrl = await createDwollaCustomer({
       ...userData,
       type: "personal",
     });
 
-    if (!dwollaCustomerUrl) throw new Error("Error creating Dwolla customer");
+    if (!dwollaCustomerUrl) {
+      // Clean up: delete the Appwrite account if Dwolla fails
+      try {
+        await account.deleteIdentity(newUserAccount.$id);
+      } catch (cleanupError) {
+        console.error("Failed to cleanup account:", cleanupError);
+      }
+      throw new Error("Error creating Dwolla customer. Please try again.");
+    }
 
     const dwollaCustomerId = extractCustomerIdFromUrl(dwollaCustomerUrl);
 
@@ -95,6 +150,16 @@ export const signUp = async ({ password, ...userData }: SignUpParams) => {
       }
     );
 
+    if (!newUser) {
+      // Clean up: delete the Appwrite account if database creation fails
+      try {
+        await account.deleteIdentity(newUserAccount.$id);
+      } catch (cleanupError) {
+        console.error("Failed to cleanup account:", cleanupError);
+      }
+      throw new Error("Error creating user profile. Please try again.");
+    }
+
     const session = await account.createEmailPasswordSession(email, password);
 
     (await cookies()).set("appwrite-session", session.secret, {
@@ -105,8 +170,90 @@ export const signUp = async ({ password, ...userData }: SignUpParams) => {
     });
 
     return parseStringify(newUser);
-  } catch (error) {
-    console.error("Error", error);
+  } catch (error: any) {
+    console.error("Sign up error:", error);
+    
+    // Handle case where account exists but database document is missing (recovery)
+    if (error?.message?.includes("already exists") || 
+        error?.message?.includes("already registered") ||
+        error?.code === 409) {
+      
+      // Try to recover: check if database document exists, if not create it
+      try {
+        const { account: existingAccount, database } = await createAdminClient();
+        
+        // Try to get the account by attempting to create a session (this will fail if password is wrong)
+        let existingUserId: string | null = null;
+        try {
+          const testSession = await existingAccount.createEmailPasswordSession(email, password);
+          existingUserId = testSession.userId;
+          // Delete the test session
+          await existingAccount.deleteSession(testSession.$id);
+        } catch (sessionError: any) {
+          // If session creation fails, it means password is wrong or account doesn't exist
+          throw new Error("An account with this email already exists. Please sign in instead.");
+        }
+
+        if (existingUserId) {
+          // Check if database document exists
+          const existingUser = await getUserInfo({ userId: existingUserId });
+          
+          if (!existingUser) {
+            // Account exists but document doesn't - create the document
+            console.log("Recovering: Creating missing database document for existing account");
+            
+            const dwollaCustomerUrl = await createDwollaCustomer({
+              ...userData,
+              type: "personal",
+            });
+
+            if (!dwollaCustomerUrl) {
+              throw new Error("Error creating Dwolla customer. Please try again.");
+            }
+
+            const dwollaCustomerId = extractCustomerIdFromUrl(dwollaCustomerUrl);
+
+            const recoveredUser = await database.createDocument(
+              DATABASE_ID!,
+              USER_COLLECTION_ID!,
+              ID.unique(),
+              {
+                ...userData,
+                userId: existingUserId,
+                dwollaCustomerId,
+                dwollaCustomerUrl,
+              }
+            );
+
+            if (recoveredUser) {
+              // Create session and return
+              const session = await existingAccount.createEmailPasswordSession(email, password);
+              (await cookies()).set("appwrite-session", session.secret, {
+                path: "/",
+                httpOnly: true,
+                sameSite: "strict",
+                secure: true,
+              });
+              return parseStringify(recoveredUser);
+            }
+          } else {
+            // Both account and document exist
+            throw new Error("An account with this email already exists. Please sign in instead.");
+          }
+        }
+      } catch (recoveryError: any) {
+        // If recovery fails, throw the original error
+        if (recoveryError.message.includes("already exists")) {
+          throw recoveryError;
+        }
+        throw new Error("An account with this email already exists. Please sign in instead.");
+      }
+      
+      throw new Error("An account with this email already exists. Please sign in instead.");
+    }
+    
+    // Re-throw the error so it can be caught and displayed
+    throw error;
   }
 };
 
@@ -144,7 +291,7 @@ export const createLinkToken = async (user: User) => {
         client_user_id: user.$id,
       },
       client_name: `${user.firstName} ${user.lastName}`,
-      products: ["auth"] as Products[],
+      products: ["auth", "transactions"] as Products[],
       language: "en",
       country_codes: ["US"] as CountryCode[],
     };
@@ -278,9 +425,14 @@ export const getBank = async ({ documentId }: getBankProps) => {
       [Query.equal("$id", [documentId])]
     );
 
+    if (!bank.documents || bank.documents.length === 0) {
+      return null;
+    }
+
     return parseStringify(bank.documents[0]);
   } catch (error) {
-    console.log(error);
+    console.error("Error getting bank:", error);
+    return null;
   }
 };
 

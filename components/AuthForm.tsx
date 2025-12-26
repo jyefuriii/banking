@@ -8,12 +8,21 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { Form } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import CustomInput from "./CustomInput";
 import { authFormSchema } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { signIn, signUp } from "@/lib/actions/user.actions";
+import { getLoggedInUser, signIn, signUp } from "@/lib/actions/user.actions";
 import PlaidLink from "./PlaidLink";
 
 const AuthForm = ({ type }: { type: string }) => {
@@ -29,6 +38,14 @@ const AuthForm = ({ type }: { type: string }) => {
     defaultValues: {
       email: "",
       password: "",
+      firstName: "",
+      lastName: "",
+      address1: "",
+      city: "",
+      state: "",
+      postalCode: "",
+      dateOfBirth: "",
+      ssn: "",
     },
   });
 
@@ -55,7 +72,9 @@ const AuthForm = ({ type }: { type: string }) => {
 
         const newUser = await signUp(userData);
 
-        setUser(newUser);
+        if (newUser) {
+          setUser(newUser);
+        }
       }
 
       if (type === "sign-in") {
@@ -64,10 +83,58 @@ const AuthForm = ({ type }: { type: string }) => {
           password: data.password,
         });
 
-        if (response) router.push("/");
+        if (response) {
+          router.push("/");
+        } else {
+          form.setError("root", {
+            message: "Invalid email or password. Please try again.",
+          });
+        }
       }
-    } catch (error) {
-      console.log(error);
+    } catch (error: any) {
+      console.error("Auth error details:", {
+        error,
+        message: error?.message,
+        code: error?.code,
+        type: error?.type,
+        stack: error?.stack
+      });
+      
+      let errorMessage = "An error occurred. Please try again.";
+      
+      if (error?.message) {
+        const msg = error.message.toLowerCase();
+        
+        // Check for specific error patterns in order of specificity
+        if (msg.includes("profile_data_missing") || msg.includes("profile data is missing") || msg.includes("profile data")) {
+          errorMessage = "Your account exists but profile data is missing. This may have occurred during sign-up. Please try signing up again with the same email, or contact support if the issue persists.";
+        } else if (msg.includes("already exists") || msg.includes("already registered")) {
+          errorMessage = "An account with this email already exists. Please sign in instead.";
+        } else if (msg.includes("user not found") || msg.includes("no account found")) {
+          errorMessage = "No account found with this email. Please sign up first.";
+        } else if ((msg.includes("invalid credentials") || 
+                   msg.includes("invalid password") || 
+                   msg.includes("wrong password") ||
+                   (error?.code === 401 && msg.includes("unauthorized"))) 
+                   && !msg.includes("profile")) {
+          errorMessage = "Invalid email or password. Please try again.";
+        } else if (msg.includes("validation error") || msg.includes("dwolla")) {
+          // Extract Dwolla validation errors
+          if (msg.includes("state")) {
+            errorMessage = "State must be a valid 2-letter US state code (e.g., CA, NY, TX). Please use a US state abbreviation.";
+          } else {
+            // Use the validation error message from Dwolla
+            errorMessage = error.message.replace("Dwolla customer creation failed: ", "").replace("Validation error: ", "");
+          }
+        } else {
+          // Use the original error message if it doesn't match any pattern
+          errorMessage = error.message.replace("PROFILE_DATA_MISSING: ", "");
+        }
+      }
+      
+      form.setError("root", {
+        message: errorMessage,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -179,6 +246,12 @@ const AuthForm = ({ type }: { type: string }) => {
                 label="Password"
                 placeholder="Enter your password"
               />
+
+              {form.formState.errors.root && (
+                <div className="text-14 text-red-500">
+                  {form.formState.errors.root.message}
+                </div>
+              )}
 
               <div className="flex flex-col gap-4">
                 <Button type="submit" disabled={isLoading} className="form-btn">

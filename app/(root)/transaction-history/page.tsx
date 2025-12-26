@@ -9,8 +9,11 @@ import React from "react";
 export const dynamic = "force-dynamic";
 
 const TransactionHistory = async ({
-  searchParams: { id, page },
+  searchParams,
 }: SearchParamProps) => {
+  const resolvedSearchParams = await searchParams;
+  const id = resolvedSearchParams.id;
+  const page = resolvedSearchParams.page;
   const currentPage = Number(page as string) || 1;
   const loggedIn = await getLoggedInUser();
   const accounts = await getAccounts({
@@ -22,15 +25,48 @@ const TransactionHistory = async ({
   const accountsData = accounts?.data;
   const appwriteItemId = (id as string) || accountsData[0]?.appwriteItemId;
 
+  if (!appwriteItemId) {
+    return (
+      <div className="transactions">
+        <div className="transactions-header">
+          <HeaderBox
+            title="Transaction History"
+            subtext="See your bank details and transactions."
+          />
+        </div>
+        <div className="flex-center mt-4">
+          <p className="text-16 text-gray-500">No account selected. Please connect a bank account.</p>
+        </div>
+      </div>
+    );
+  }
+
   const account = await getAccount({ appwriteItemId });
+  
+  if (!account) {
+    return (
+      <div className="transactions">
+        <div className="transactions-header">
+          <HeaderBox
+            title="Transaction History"
+            subtext="See your bank details and transactions."
+          />
+        </div>
+        <div className="flex-center mt-4">
+          <p className="text-16 text-gray-500">No account found. Please connect a bank account.</p>
+        </div>
+      </div>
+    );
+  }
 
   const rowsPerPage = 10;
-  const totalPages = Math.ceil(account?.transactions.length / rowsPerPage);
+  const transactions = account?.transactions || [];
+  const totalPages = Math.ceil(transactions.length / rowsPerPage);
 
   const indexOfLastTransaction = currentPage * rowsPerPage;
   const indexOfFirstTransaction = indexOfLastTransaction - rowsPerPage;
 
-  const currentTransactions = account?.transactions.slice(
+  const currentTransactions = transactions.slice(
     indexOfFirstTransaction,
     indexOfLastTransaction
   );

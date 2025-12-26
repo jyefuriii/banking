@@ -61,7 +61,19 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
   try {
     // get bank from db
     const bank = await getBank({ documentId: appwriteItemId });
+    
+    if (!bank) {
+      console.error(`Bank account not found for appwriteItemId: ${appwriteItemId}`);
+      return null;
+    }
+    
     console.log("Bank Data:", bank);
+    
+    if (!bank.accessToken) {
+      console.error("Bank account missing accessToken");
+      return null;
+    }
+    
     // get account info from plaid
     const accountsResponse = await plaidClient.accountsGet({
       access_token: bank.accessToken,
@@ -147,15 +159,36 @@ export const getTransactions = async ({
 }: getTransactionsProps) => {
   let hasMore = true;
   let transactions: Array<Record<string, unknown>> = [];
+  let cursor: string | undefined = undefined;
 
   try {
+    // Validate access token
+    if (!accessToken) {
+      console.error("Access token is missing");
+      return parseStringify([]);
+    }
+
     // Iterate through each page of new transaction updates for item
     while (hasMore) {
-      const response = await plaidClient.transactionsSync({
+      const requestParams: any = {
         access_token: accessToken,
-      });
+      };
+
+      // Only include cursor if we have one (first call uses empty string)
+      if (cursor !== undefined) {
+        requestParams.cursor = cursor;
+      } else {
+        // First call - use empty string for initial sync
+        requestParams.cursor = "";
+      }
+
+      const response = await plaidClient.transactionsSync(requestParams);
 
       const data = response.data;
+      
+      // Update cursor for next iteration
+      cursor = data.next_cursor;
+      
       // Ensure that data.added is an array before trying to map over it
       if (Array.isArray(data.added)) {
         transactions = [
@@ -181,8 +214,43 @@ export const getTransactions = async ({
     }
 
     return parseStringify(transactions);
-  } catch (error) {
-    console.error("An error occurred while getting the accounts:", error);
+  } catch (error: any) {
+    console.error("An error occurred while getting transactions:", {
+      message: error?.message,
+      response: error?.response?.data,
+      status: error?.response?.status,
+      statusText: error?.response?.statusText,
+      error: error
+    });
+    
+    // Log detailed Plaid error if available
+    if (error?.response?.data) {
+      const plaidError = error.response.data;
+      console.error("Plaid API error details:", {
+        error_code: plaidError.error_code,
+        error_message: plaidError.error_message,
+        error_type: plaidError.error_type,
+        display_message: plaidError.display_message,
+        request_id: plaidError.request_id
+      });
+    }
+    
+    // If it's a 400 error, it might be because the access token is invalid or expired
+    if (error?.response?.status === 400) {
+      const errorMessage = error?.response?.data?.error_message || error?.message || "Unknown error";
+      const errorCode = error?.response?.data?.error_code;
+      console.error(`Plaid API 400 error: ${errorMessage}`);
+      
+      // Common Plaid 400 errors:
+      if (errorMessage.includes("INVALID_ACCESS_TOKEN") || errorMessage.includes("ITEM_LOGIN_REQUIRED")) {
+        console.error("Access token is invalid or expired. User needs to re-link their bank account.");
+      } else if (errorCode === "ADDITIONAL_CONSENT_REQUIRED" || errorMessage.includes("PRODUCT_TRANSACTIONS")) {
+        console.error("Bank account was linked without transactions consent. User needs to re-link the account with transactions product enabled.");
+        // Return empty array but log a clear message
+        return parseStringify([]);
+      }
+    }
+    
     return parseStringify([]);
   }
 };
